@@ -81,6 +81,14 @@ details.more .grid2{margin-top:6px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .top>div{min-width:0;flex:1 1 280px}
+.rec-list{display:flex;flex-direction:column;gap:10px}
+.rec{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.rec .who{min-width:0;flex:1 1 160px;overflow-wrap:anywhere}
+.rec .who b{display:block}
+.rec .who span{color:var(--muted);font-size:.92rem}
+.rec .acts{display:flex;gap:8px}
+.rec .btn{min-height:44px;padding:0 14px}
+.addrow{align-self:end}
 </style>
 </head>
 <body>
@@ -184,6 +192,21 @@ details.more .grid2{margin-top:6px}
       <button class="btn" type="button" id="shareBtn" hidden>Share PDF</button>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="step" aria-labelledby="h4">
+    <h2 id="h4"><span class="n">4</span>Send to</h2>
+    <p class="hint">Save the people you send delivery notes to. Send saves the signed PDF, then opens a WhatsApp chat or an email to that person. In that message, tap the paperclip and attach the PDF from Downloads. Share PDF in step 3 attaches the file in one step, but you pick the person in the share screen.</p>
+    <div class="rec-list" id="recList"></div>
+    <p class="hint" id="recEmpty">No one saved yet.</p>
+    <form id="recForm" class="grid2" autocomplete="off">
+      <label class="f">Name<input type="text" id="recName" placeholder="Dispatch office"></label>
+      <label class="f">Send by<select id="recType"><option value="wa">WhatsApp</option><option value="mail">Email</option></select></label>
+      <label class="f"><span id="recValueLabel">WhatsApp number</span><input type="text" id="recValue" inputmode="tel" placeholder="082 123 4567"></label>
+      <label class="f">Country code for numbers starting with 0<input type="text" id="recCC" inputmode="numeric" value="27"></label>
+      <button class="btn primary addrow" type="submit">Add person</button>
+    </form>
+    <p class="status" id="recStatus" role="status" aria-live="polite"></p>
   </section>
 </div>
 <script type="module">
@@ -612,6 +635,91 @@ $('savePng').addEventListener('click',async()=>{
   paint(cv.getContext('2d'),w,h,d);
   await saveOut(await blobOf(cv,'image/png'),outName('png'));
 });
+
+/* ---------- saved recipients ---------- */
+const RK='signedpod.recipients',CK='signedpod.cc';
+let recs=[];
+try{recs=JSON.parse(localStorage.getItem(RK)||'[]')||[]}catch(e){recs=[]}
+try{$('recCC').value=localStorage.getItem(CK)||'27'}catch(e){}
+function saveRecs(){try{localStorage.setItem(RK,JSON.stringify(recs));localStorage.setItem(CK,$('recCC').value)}catch(e){}}
+const recMsg=(t,k)=>{const el=$('recStatus');el.textContent=t||'';el.className='status'+(k===1?' ok':k===2?' err':'')};
+function waNumber(raw){
+  const t=String(raw).trim(),d=t.replace(/\D/g,''),cc=($('recCC').value||'').replace(/\D/g,'');
+  if(t.startsWith('+'))return d;
+  if(d.startsWith('00'))return d.slice(2);
+  if(d.startsWith('0')&&cc)return cc+d.slice(1);
+  return d;
+}
+function renderRecs(){
+  const list=$('recList');list.innerHTML='';
+  $('recEmpty').hidden=recs.length>0;
+  recs.forEach(r=>{
+    const row=document.createElement('div');row.className='rec';
+    const who=document.createElement('div');who.className='who';
+    const b=document.createElement('b');b.textContent=r.name;
+    const v=document.createElement('span');v.textContent=(r.type==='wa'?'WhatsApp +':'Email ')+r.value;
+    who.appendChild(b);who.appendChild(v);
+    const acts=document.createElement('div');acts.className='acts';
+    const send=document.createElement('button');send.type='button';send.className='btn primary';
+    send.textContent='Send';send.setAttribute('aria-label','Send signed PDF to '+r.name);
+    send.addEventListener('click',()=>sendTo(r));
+    const del=document.createElement('button');del.type='button';del.className='btn';
+    del.textContent='Remove';del.setAttribute('aria-label','Remove '+r.name);
+    del.addEventListener('click',()=>{recs=recs.filter(x=>x.id!==r.id);saveRecs();renderRecs()});
+    acts.appendChild(send);acts.appendChild(del);
+    row.appendChild(who);row.appendChild(acts);list.appendChild(row);
+  });
+}
+$('recType').addEventListener('change',e=>{
+  const wa=e.target.value==='wa';
+  $('recValueLabel').textContent=wa?'WhatsApp number':'Email address';
+  $('recValue').placeholder=wa?'082 123 4567':'name@example.com';
+  $('recValue').inputMode=wa?'tel':'email';
+  $('recValue').value='';
+});
+$('recForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const type=$('recType').value,raw=$('recValue').value.trim();
+  let name=$('recName').value.trim(),value;
+  if(type==='wa'){
+    value=waNumber(raw);
+    if(value.length<8||value.length>15){recMsg('Enter the full WhatsApp number, for example 082 123 4567.',2);return}
+  }else{
+    value=raw;
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)){recMsg('Enter a valid email address.',2);return}
+  }
+  if(!name)name=value;
+  recs.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,type:type,value:value});
+  saveRecs();renderRecs();
+  $('recName').value='';$('recValue').value='';
+  recMsg('Saved '+name+'.',1);
+});
+$('recCC').addEventListener('change',saveRecs);
+async function sendTo(r){
+  const d=cur();
+  if(!d||!d.bg){setStatus('Choose a delivery note first.',2);return}
+  if(!ready())return;
+  setStatus('Building the PDF…');
+  try{
+    const bytes=await buildPdf(),name=outName('pdf');
+    saveOut(new Blob([bytes],{type:'application/pdf'}),name);
+    const ref=S.mode==='form'?D.dn:String(d.name).replace(/\.[^.]+$/,'');
+    const subject='Signed proof of delivery '+ref;
+    const msg='Signed proof of delivery for '+ref+'. Received by '+S.recv.trim()+' on '+dmy(S.date)+'. PDF attached.';
+    const url=r.type==='wa'
+      ?'https://wa.me/'+r.value+'?text='+encodeURIComponent(msg)
+      :'mailto:'+r.value+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(msg);
+    setTimeout(()=>{
+      const a=document.createElement('a');a.href=url;
+      if(r.type==='wa'){a.target='_blank';a.rel='noopener'}
+      document.body.appendChild(a);a.click();a.remove();
+      setStatus('PDF saved to Downloads. In the message, tap the paperclip and attach it.',1);
+    },700);
+  }catch(e){
+    setStatus(e&&e.message==='rotated'?'This PDF page is rotated. Use a photo of the page instead.':'Could not build the PDF.',2);
+  }
+}
+renderRecs();
 
 /* ---------- install and offline ---------- */
 let installEvt=null;
