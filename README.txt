@@ -26,6 +26,15 @@ Install on Android
   3. Open it from the new Signed POD icon. It works without signal after
      the first load.
 
+Sending
+  Step 4 "Send to" keeps a list of WhatsApp numbers and email addresses on
+  the phone. Tap Send PDF next to a person: the phone's share screen opens
+  with the signed PDF attached. Choose WhatsApp or your email app, then pick
+  that person (their number or address is copied for you to paste).
+  "Message only" opens a chat or email to them without the PDF.
+  A web app cannot attach a file to a chat link, which is why the share
+  screen is used.
+
 Saving
   "Save signed PDF" downloads to the phone's Downloads folder.
   "Share PDF" (shown when the phone supports it) sends the PDF straight to
@@ -33,7 +42,7 @@ Saving
 
 Updating later
   If you change any file, edit VERSION at the top of sw.js (for example
-  signed-pod-v2) so phones pick up the new copy.
+  signed-pod-v4) so phones pick up the new copy.
 
 Notes
   - Opening index.html straight from the phone's files will not install.

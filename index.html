@@ -86,7 +86,7 @@ details.more .grid2{margin-top:6px}
 .rec .who{min-width:0;flex:1 1 160px;overflow-wrap:anywhere}
 .rec .who b{display:block}
 .rec .who span{color:var(--muted);font-size:.92rem}
-.rec .acts{display:flex;gap:8px}
+.rec .acts{display:flex;flex-wrap:wrap;gap:8px}
 .rec .btn{min-height:44px;padding:0 14px}
 .addrow{align-self:end}
 </style>
@@ -196,7 +196,7 @@ details.more .grid2{margin-top:6px}
 
   <section class="step" aria-labelledby="h4">
     <h2 id="h4"><span class="n">4</span>Send to</h2>
-    <p class="hint">Save the people you send delivery notes to. Send saves the signed PDF, then opens a WhatsApp chat or an email to that person. In that message, tap the paperclip and attach the PDF from Downloads. Share PDF in step 3 attaches the file in one step, but you pick the person in the share screen.</p>
+    <p class="hint">Save the people you send delivery notes to. Send PDF opens your phone's share screen with the signed PDF already attached: choose WhatsApp or your email app, then pick the person shown here. Their number or address is copied so you can paste it if you need to. Message only opens a chat or email to that person without the PDF.</p>
     <div class="rec-list" id="recList"></div>
     <p class="hint" id="recEmpty">No one saved yet.</p>
     <form id="recForm" class="grid2" autocomplete="off">
@@ -661,12 +661,15 @@ function renderRecs(){
     who.appendChild(b);who.appendChild(v);
     const acts=document.createElement('div');acts.className='acts';
     const send=document.createElement('button');send.type='button';send.className='btn primary';
-    send.textContent='Send';send.setAttribute('aria-label','Send signed PDF to '+r.name);
-    send.addEventListener('click',()=>sendTo(r));
+    send.textContent='Send PDF';send.setAttribute('aria-label','Send signed PDF to '+r.name);
+    send.addEventListener('click',()=>sendTo(r,true));
+    const msgOnly=document.createElement('button');msgOnly.type='button';msgOnly.className='btn';
+    msgOnly.textContent='Message only';msgOnly.setAttribute('aria-label','Open a message to '+r.name+' without the PDF');
+    msgOnly.addEventListener('click',()=>sendTo(r,false));
     const del=document.createElement('button');del.type='button';del.className='btn';
     del.textContent='Remove';del.setAttribute('aria-label','Remove '+r.name);
     del.addEventListener('click',()=>{recs=recs.filter(x=>x.id!==r.id);saveRecs();renderRecs()});
-    acts.appendChild(send);acts.appendChild(del);
+    acts.appendChild(send);acts.appendChild(msgOnly);acts.appendChild(del);
     row.appendChild(who);row.appendChild(acts);list.appendChild(row);
   });
 }
@@ -695,25 +698,48 @@ $('recForm').addEventListener('submit',e=>{
   recMsg('Saved '+name+'.',1);
 });
 $('recCC').addEventListener('change',saveRecs);
-async function sendTo(r){
+const canShareFiles=(()=>{
+  try{return !!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'a.pdf',{type:'application/pdf'})]}))}catch(e){return false}
+})();
+function openLink(r,msg,subject){
+  const url=r.type==='wa'
+    ?'https://wa.me/'+r.value+'?text='+encodeURIComponent(msg)
+    :'mailto:'+r.value+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(msg);
+  const a=document.createElement('a');a.href=url;
+  if(r.type==='wa'){a.target='_blank';a.rel='noopener'}
+  document.body.appendChild(a);a.click();a.remove();
+}
+async function sendTo(r,withFile){
   const d=cur();
   if(!d||!d.bg){setStatus('Choose a delivery note first.',2);return}
   if(!ready())return;
+  const copy=r.type==='wa'?'+'+r.value:r.value;
+  if(withFile&&canShareFiles){
+    try{if(navigator.clipboard)navigator.clipboard.writeText(copy).catch(()=>{})}catch(e){}
+  }
   setStatus('Building the PDF…');
   try{
     const bytes=await buildPdf(),name=outName('pdf');
-    saveOut(new Blob([bytes],{type:'application/pdf'}),name);
     const ref=S.mode==='form'?D.dn:String(d.name).replace(/\.[^.]+$/,'');
     const subject='Signed proof of delivery '+ref;
-    const msg='Signed proof of delivery for '+ref+'. Received by '+S.recv.trim()+' on '+dmy(S.date)+'. PDF attached.';
-    const url=r.type==='wa'
-      ?'https://wa.me/'+r.value+'?text='+encodeURIComponent(msg)
-      :'mailto:'+r.value+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(msg);
+    const msg='Signed proof of delivery for '+ref+'. Received by '+S.recv.trim()+' on '+dmy(S.date)+'.';
+    if(withFile&&canShareFiles){
+      const file=new File([bytes],name,{type:'application/pdf'});
+      try{
+        await navigator.share({files:[file],title:subject,text:msg});
+        setStatus('');
+        return;
+      }catch(e){
+        if(e&&e.name==='AbortError'){setStatus('');return}
+        /* share failed: fall through to save and open a message */
+      }
+    }
+    saveOut(new Blob([bytes],{type:'application/pdf'}),name);
     setTimeout(()=>{
-      const a=document.createElement('a');a.href=url;
-      if(r.type==='wa'){a.target='_blank';a.rel='noopener'}
-      document.body.appendChild(a);a.click();a.remove();
-      setStatus('PDF saved to Downloads. In the message, tap the paperclip and attach it.',1);
+      openLink(r,msg+(withFile?' PDF attached.':''),subject);
+      setStatus(withFile
+        ?'This phone cannot attach the PDF automatically. It is saved in Downloads: tap the paperclip in the message and attach it.'
+        :'PDF saved to Downloads. Message opened without the PDF.',1);
     },700);
   }catch(e){
     setStatus(e&&e.message==='rotated'?'This PDF page is rotated. Use a photo of the page instead.':'Could not build the PDF.',2);

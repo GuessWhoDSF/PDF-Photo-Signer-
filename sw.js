@@ -1,5 +1,5 @@
 /* Caches the whole app so it opens and works with no signal. Bump VERSION when you change any file. */
-const VERSION = 'signed-pod-v2';
+const VERSION = 'signed-pod-v3';
 const FILES = [
   './',
   'index.html',
