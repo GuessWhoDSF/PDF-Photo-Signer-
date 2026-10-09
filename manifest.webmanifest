@@ -1,0 +1,16 @@
+{
+  "name": "Signed POD",
+  "short_name": "Signed POD",
+  "description": "Load a delivery note, have the customer sign, and save a signed proof of delivery PDF.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e9edf1",
+  "theme_color": "#0b5a87",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
